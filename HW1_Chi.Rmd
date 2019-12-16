@@ -1,0 +1,144 @@
+---
+title: "HW1"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(tidyverse)
+```
+
+# Problem 1
+
+Suppose the globe tossing data had turned out to be 8 water in 15 tosses. Construct the posterior distribution, using grid approximation. Use same flat prior as before.
+
+```{r}
+
+# So, let's try grid with 100 points
+grid <- seq(0,1,length.out=100)
+
+# Then compute value of prior
+prior <- rep(1, 100)
+
+# calculate likelihood using binomial model, calculate prob at each grid point to find 
+# an approximation of the likelihood function
+likelihood <- dbinom(8,15, grid)
+
+# calculate posterior 
+posterior_unstd <- likelihood * prior
+
+posterior <- posterior_unstd / sum(posterior_unstd)
+
+plot(grid, posterior, type="b")
+
+# don't forget to sample the grid using your posterior distribution! (for some reason)
+samples <- sample(grid, prob=posterior, size=1e4, replace=TRUE)
+
+samples_df <- 
+  tibble(samples)
+
+ggplot(samples_df, aes(samples)) + 
+  geom_freqpoly(binwidth=0.001)
+```
+
+The above graph is the posterior distribution with prior distribution of a uniform distribution $u \sim unif(0,1)$ 
+
+***
+
+# Problem 2
+
+Start of in 1, but now use a prior that is zero below $p=0.5$ and a constat above $p=0.5$. This corresponds to prior information that a majority of the Earth's surface is water. What difference does the better prior make? If it helps, compare posterior distributions (using both priors) to the true value $p = 0.7$
+```{r}
+# So, let's try grid with 100 points
+grid <- seq(0,1,length.out=500)
+
+# Then compute value of prior
+prior <- ifelse(grid > 0.7, 1/0.3, 0)
+
+# calculate likelihood using binomial model, calculate prob at each grid point to find 
+# an approximation of the likelihood function
+likelihood <- dbinom(8,15, grid)
+
+# calculate posterior 
+posterior_unstd <- likelihood * prior
+
+posterior <- posterior_unstd / sum(posterior_unstd)
+
+sample_df <- 
+sample(grid, size=1e4, replace=TRUE, prob=posterior) %>% 
+  tibble() 
+
+colnames(sample_df)[1] <- "sample"
+
+
+
+ggplot(sample_df, aes(sample)) +
+  geom_freqpoly(binwidth=0.006)
+
+
+
+```
+
+Here, we used the prior to be 0 if grid value is less than 0.7, and the prior distribution is defined to be: 
+
+
+$$
+Pr(p | W,N) = 
+\begin{cases} 
+      0 & x < 0.7 \\
+      \frac{1}{0.3} & x \geq 0.7 
+   \end{cases}
+$$
+
+From the graph above, we see that the distribution is peaked at 0.7, with most mass centered between 0.7 and 0.8. 
+
+
+***
+
+# Problem 3
+
+Suppose you want to estimate the Earth's proportion of water very precisely. Specifically, you want the 99% percentile interval of the posterior distribution of p to be only 0.05 wide. This means the distance between the upper and lower bound of the interval should be 0.05. How many times will you have to toss the globe to do this? 
+
+The general approach is to running a for loop and change values inside of dbinom until the result fit the criteria that we define. 
+
+
+```{r}
+
+
+# the grid does not change
+grid <- seq(0,1,length.out=1000)
+
+# we use the uniform distribution as our prior
+prior <- rep(1, 1000)
+i = 200
+
+# Again, try to use the data! 
+
+while(i < 1000000){
+  
+  
+  # Here is what we varie. We change the number of tosses until it fit our criteria
+  likelihood <- dbinom(as.integer(i * 0.7), i, grid)
+  
+  # calculate posterior 
+  posterior_unstd <- likelihood * prior
+  
+  posterior <- posterior_unstd / sum(posterior_unstd)
+  center_index <- which(posterior == max(posterior))
+  center_grid <- grid[center_index]
+  MARGIN_OF_ERR = 0.025
+  upper_bd <- center_grid + MARGIN_OF_ERR
+  lower_bd <- center_grid - MARGIN_OF_ERR
+  confidence <- sum(posterior[which(grid > lower_bd & grid < upper_bd)])
+  if(confidence >= 0.99){
+    break
+  }
+  i <- i + 1
+}
+i
+
+plot(grid, posterior)
+```
+
+Via this approach, we find out that we need 2313 tosses to reach 99% interval.
