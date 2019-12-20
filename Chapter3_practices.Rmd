@@ -1,0 +1,43 @@
+---
+title: "Chapter 3 Practices"
+output: html_notebook
+---
+```{r}
+library(rethinking)
+```
+
+3M1
+```{r}
+
+#3M1
+grid <- seq(0,1, length.out=1000)
+p <- rep(1,1000)
+W <- dbinom(8,15,prob=grid)
+
+posterior_raw <- p * W
+posterior <- posterior_raw / sum(posterior_raw)
+```
+
+3M2
+```{r}
+samples <- sample(grid, 1e4, replace=TRUE, prob=posterior)
+HPDI(samples, prob=0.9)
+```
+
+3M3
+```{r}
+dum_data <- rbinom(1e4,15,prob=samples)
+prob <- length(dum_data[dum_data== 8]) / length(dum_data)
+cat("The probability of getting 8 out of 15 is:" , prob)
+```
+
+3M4
+```{r}
+likelihood6of9 <- dbinom(6,9,grid)
+prior6of9 <- posterior
+posterior6of9 <- likelihood6of9 * prior6of9
+cat("The probability of getting 6 out of 9 is:", sum(posterior6of9))
+```
+
+
+
