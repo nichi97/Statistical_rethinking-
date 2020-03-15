@@ -1,3 +1,4 @@
+
 #2M1
 # define the grid
 p_grid <- seq(0,1,length.out=1000)

@@ -1,0 +1,381 @@
+---
+title: "Chapter4_practices"
+output: html_notebook
+---
+
+```{r message=F}
+library(rethinking)
+```
+
+# 4E1
+
+Likelihood is the first line, that is, 
+
+$$
+y_i \sim Normal(\mu, \sigma)
+$$
+
+The other two lines defines the prior, and likelihood is a distribution based on other priors. 
+
+
+# 4E2
+
+There are two parameters above: $\mu, \sigma$.
+
+# 4E3 
+
+Using the model definition above, write down the appropriate form of Bayes' theorem that includes the proper likelihood and priors.
+
+The explanation is on page 80. 
+
+$$
+Pr(p | \mu, \sigma) = \frac{Normal(\mu, \sigma | p) \cdot Normal(p | 0, 10)\cdot Exp(p|1)}{\int  Normal(\mu, \sigma | p) \cdot Normal(p | 0, 10)\cdot Exp(p|1)dp}
+$$
+Not quite sure what does it mean by $Exp(p|1)$ tho. 
+
+# 4E4
+
+The linear model is the second line, 
+
+$$
+\mu_i = \alpha + \beta x_i
+$$
+
+# 4E5 
+
+In the model definition just above, there are 3 parameters in the prior distribution. $\alpha, \beta, \text{and }\sigma$
+
+
+# 4M1
+
+```{r}
+set.seed(116)
+N = 1000
+mu <- rnorm(N, 0, 10 )
+sigma <- rexp(N, 1)
+y <- rnorm(mu, sigma)
+dens(y)
+mean(y) # 1.028
+median(y) # 0.932
+
+```
+
+# 4M2
+
+The translation is shown below: 
+
+```{r}
+p4.2 <- quap(
+  alist(
+    y ~ dnorm(mu, sigma), 
+    mu ~ dnorm(0, 10), 
+    sigma ~ dexp(1)
+  )
+)
+```
+
+
+# 4M3
+
+The translated mathematical model definition is shown below: 
+
+$$
+y_i \sim Normal(\mu_i, sigma) \\ 
+\mu = \alpha + \beta x_i \\
+\alpha \sim Normal(0, 10) \\ 
+\beta \sim Uniform(0,1) \\ 
+\sigma \sim Exp(1)
+$$
+
+# 4M4
+
+The assumption of my model is that the height data is distributed in a normal fashion.
+
+The mathematical definition is shown as following: 
+
+$$
+h_i \sim Normal(\mu_i, \sigma) \\
+\mu_i = \alpha + \beta x_i \\
+\alpha \sim Normal(180, 20) \\
+\beta \sim Normal(0,10) \\ 
+\sigma \sim Exp(1)
+$$
+To briefly explain my model, the first line reflects the assumption that the height data is distributed normally. $\mu_i$ is defined as a linear combination of $\alpha$ and $\beta x_i$. $\alpha, \beta, \sigma$ are all priors that is defined under reasonable consideration. The choice of $\alpha$ ties back to its meaning. $\alpha$ represents the average height, and since my height is 180 cm, of course I would choose my own height as the mean. $\beta$ is the slope, and just to give the model some flexibility, I define the standard deviation to be 10. 
+
+# 4M5
+Haha that's a good point indeed. To adjust for this knowledge, we know that the slope is only positive in this case, hence $\beta$ should have only positive distribution. One way to reflect this piece of information mathematically is to change to distribution of $\beta$. Namely: 
+$$
+\beta \sim Log-Normal(0,1)
+$$
+which only has positive distribution
+
+# 4M6
+
+$$
+\alpha \sim Normal(180, 64)
+$$
+
+# 4H1 
+
+First, we fit the linear model using Howell1 dataset
+```{r}
+library(tidyverse)
+library(rethinking)
+data(Howell1)
+d <- Howell1
+
+# standardize the variabels
+d$H <- scale(d$height)
+d$W <- scale(d$weight)
+
+# actually fit the model
+m4.1 <- quap(
+  alist(
+    H ~ dnorm(mu, sigma), 
+    mu <- a + b * W,
+    a ~ dnorm(0, 1), 
+    b ~ dlnorm(0, 1), 
+    sigma ~ dexp(1)
+  ), data = d
+)
+
+# check if the prior is okay
+N = 50
+prior <- extract.prior(m4.1, n=N) %>% 
+  data.frame()
+ggplot(data=prior) + 
+  geom_abline(aes(intercept=a, slope=b)) + 
+  ylim(c(-2,2)) + 
+  xlim(c(0, max(d$W)))
+
+# after adjusting to based on the prior prediction plot, all the priors are set to reaonsable distributions.
+
+samples <- extract.samples(m4.1)
+
+mean(samples$b)
+
+small_samples <- samples[0:100, ]
+
+ggplot() + 
+  geom_abline(data=small_samples, aes(intercept=a, slope=b)) + 
+  geom_point(data=d, aes(W, H)) + 
+  ylim(c(-2,2)) + 
+  xlim(c(0, max(d$W)))
+
+raw_list <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+ls <- (raw_list - mean(d$weight)) / sd(d$weight)
+
+missing_weight <- list(W = ls)
+
+pred <- sim(fit=m4.1, data=missing_weight)
+
+expected_height <- 
+  apply(pred, 2, mean) %>% 
+  `*`(sd(d$height)) %>% 
+  `+`(mean(d$height)) 
+
+expected_PI <- 
+  apply(pred, 2, PI) %>% 
+  `*`(sd(d$height)) %>% 
+  `+`(mean(d$height)) 
+
+```
+
+The expected height and interval is the following: 
+
+Individual | weight | expected height| 89% interval
+-----------|--------|----------------|-------------
+1          | 46.95  |  158.79        | (144.45, 173.86)
+2          | 43.72  |  152.71        | (138.63, 167.84)
+3          | 64.78  |  189.95        | (174.42, 205.21)
+4          | 32.59  |  132.95        | (117.43, 148.26) 
+5          | 54.63  |  172.01        | (156.26, 186.87)
+
+# 4H2
+```{r}
+library(rethinking)
+library(tidyverse)
+data("Howell1")
+d <- Howell1
+```
+
+```{r}
+# select from d such that only people of age under 18 are selected
+d <- 
+  d %>% 
+  filter(age < 18)
+```
+
+## 4H2a
+
+```{r}
+ggplot(data=d, aes(weight, height)) + 
+  geom_point()
+```
+
+From this plot above, we can see that there is a strong linear relationship between weight and height. Hence, we can regress height on weight.
+
+The mathematical definition is defined as the following: 
+
+$$
+\begin{align*}
+  Height &\sim Normal(\mu, \sigma) \\
+  \mu    &\sim \alpha + \beta \cdot Weight \\
+  \alpha &\sim Normal(170, 30) \\
+  \beta  &\sim Log-Normal(0,1) \\
+  \sigma &\sim Exp(1)
+\end{align*}
+$$
+
+Under this model definition, we fit the linear model using quap.
+
+```{r}
+m4.2 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma), 
+    mu <- a + b * weight, 
+    a ~ dnorm(170, 30), 
+    b ~ dlnorm(0, 1), 
+    sigma ~ dexp(1)
+  ), data = d
+)
+precis(m4.2)
+```
+According to the fitted result, for each 10 unit increase in weight, the model predict the height to be taller by 27.1 units.
+
+## 4H2b
+
+```{r}
+# imposing 89% interval for mean
+set.seed(19980116)
+samples <- extract.samples(m4.2)
+weight_grid <- seq(range(d$weight)[1], range(d$weight)[2], length.out=100)
+weight_grid <- data.frame(
+  weight = weight_grid
+)
+mu <- link(m4.2, data=weight_grid)
+m_summary <- apply(samples, 2, mean) 
+a <- m_summary[1]
+b <- m_summary[2]
+interval_89 <- apply(mu, 2, PI)
+plot(d$weight, d$height)
+abline(a=a, b=b)
+shade(interval_89, lim=weight_grid$weight)
+
+
+
+```
+
+```{r}
+# imposing 89% interval for prediction
+pred <- sim(m4.2, data=weight_grid)
+pi_89 <- apply(pred, 2, PI)
+plot(d$weight, d$height)
+abline(a=a, b=b)
+shade(pi_89, lim=weight_grid$weight)
+```
+
+## 4H2c
+
+This model does not seems to be linear. From the graph, there is definitely a polynomial or exponential trend going on. Maybe change the linear relationship line to be what is expected, such as exponential or second degree polynomial
+
+# 4H3
+
+
+## 4H3a
+```{r}
+m4.3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma), 
+    mu <-  a + b * log(weight), 
+    a ~ dnorm(178, 20), 
+    b ~ dlnorm(0,1), 
+    sigma ~ dunif(0, 50)
+  ), data = d
+)
+precis(m4.3)
+```
+
+This model assumes a linear relationship between the magnitude of weight and the height. 
+
+## 4H3b
+
+```{r}
+# plot 97% interval for mean
+grid <- seq(min(d$weight), max(d$weight), length.out=1000)
+grid <-  data.frame(weight=grid)
+mu <- link(m4.3, data=grid)
+pred <- apply(mu, 2, mean)
+mu_interval <- apply(mu, 2, PI, 0.97)
+plot(height ~ weight, data=d, col=col.alpha(rangi2, 0.4))
+lines(x=grid$weight, y=pred)
+shade(mu_interval, lim=grid$weight)
+
+```
+```{r}
+# Plot 97% for prediction
+grid <- seq(min(d$weight), max(d$weight), length.out=1000)
+grid <-  data.frame(weight=grid)
+mu <- sim(m4.3, data=grid)
+pred <- apply(mu, 2, mean)
+mu_interval <- apply(mu, 2, PI, 0.97)
+plot(height ~ weight, data=d, col=col.alpha(rangi2, 0.4))
+lines(x=grid$weight, y=pred)
+shade(mu_interval, lim=grid$weight)
+
+```
+
+# 4H4
+
+Plot the prior predictive distribution for the polynomial regression model in the chapter. You can modify the code that plots the linear regression prior predictive distribution. Can you modify the prior distributions of $\alpha, \beta_1, \beta_2$ so that the prior predictions stay within the biologically reasonable outcome space? That is to say: Do not try to fit the data by hand. But do try to keep the curves consistent with what you know about height and weight, before seeing these exact data.  
+
+```{r}
+
+library(rethinking)
+data(Howell1)
+d <- Howell1
+str(d)
+
+
+d$weight_s <- (d$weight - mean(d$weight)) / sd(d$weight)
+d$weight_s2 <- d$weight_s^2
+m4.5 <- quap(
+  alist(
+    height ~ dnorm( mu, sigma ),
+    mu <- a + b1 * weight_s + b2 * weight_s2,
+    a ~ dnorm(178, 20),
+    b1 ~ dlnorm(1,1),
+    b2 ~ dlnorm(1,1),
+    sigma ~ dunif(0,50)
+  ) , 
+  data=d
+)
+precis(m4.5)
+
+grid <- seq(from=min(d$weight_s),to=max(d$weight_s) , length.out=500 )
+grid <- data.frame(weight_s = grid, weight_s2 = grid^2)
+mu <- link(m4.5, data=grid)
+mu_pred <- apply(mu, 2, mean)
+
+plot(d$weight_s, d$height, col=col.alpha(rangi2, 0.5))
+lines(x= grid$weight_s, y=mu_pred)
+
+prior <- extract.prior(m4.5)
+mu <- link(m4.5, post=prior, data=grid)
+plot(NULL, xlim=range(grid$weight_s), ylim=range(d$height))
+for(i in 1:50) lines(grid$weight_s, mu[i,], col=col.alpha("black", 0.4))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

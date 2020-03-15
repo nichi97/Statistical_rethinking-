@@ -202,4 +202,95 @@ lines(weight_seq, mu_mean)
 shade(height_PI, weight_seq)  
 
 
-# 4.5.1
+# 4.5.1 Polynomial regression
+
+library(rethinking)
+data(Howell1)
+d <- Howell1
+str(d)
+
+plot(d$height, d$weight)
+
+d$weight_s <- (d$weight - mean(d$weight)) / sd(d$weight)
+d$weight_s2 <- d$weight_s^2
+m4.5 <- quap(
+  alist(
+    height ~ dnorm( mu, sigma ),
+    mu <- a + b1 * weight_s + b2 * weight_s2,
+    a ~ dnorm(178, 20),
+    b1 ~ dlnorm(0,1),
+    b2 ~ dnorm(0,1),
+    sigma ~ dunif(0,50)
+  ) , 
+  data=d
+)
+
+precis(m4.5)
+
+weight_seq <- seq(from=-2.2, to=2, length.out=30)
+pred_dat <- list(weight_s=weight_seq, weight_s2=weight_seq^2)
+mu <- link(m4.5, data=pred_dat)
+mu_mean <- apply(mu, 2, mean)
+mu_PI <- apply(mu, 2, PI, prob=0.89)
+sim_height <- sim(m4.5, data=pred_dat)
+height_PI <- apply(sim_height, 2, PI, prob=0.89)
+
+# plot them
+plot(height ~ weight_s, d, col=col.alpha(rangi2, 0.5))
+lines(weight_seq, mu_mean)
+shade(mu_PI, weight_seq)
+shade(height_PI, weight_seq)
+
+##########################################
+# 4.5.2 Splines
+##########################################
+
+library(rethinking)
+data("cherry_blossoms")
+d <- cherry_blossoms
+precis(d, hist=FALSE)
+
+plot(d$year, d$temp, col=col.alpha(rangi2, 0.5))
+
+d2 <- d[complete.cases(d$temp), ] # complete cases on temp
+num_knots <- 15
+knot_list <- quantile(d2$year, probs=seq(0,1,length.out=num_knots))
+
+library(splines)
+
+B <- bs(d2$year, knots=knot_list[-c(1,num_knots)], 
+        degree=3, intercept=TRUE)
+
+plot(d2$year, B[,2])
+
+plot(NULL, xlim=range(d2$year), ylim=c(0,1), xlab="year", ylab="basis value")
+for(i in 1:ncol(B)) lines(d2$year , B[,i])
+
+m4.7 <- quap(
+  alist(
+    T ~ dnorm( mu, sigma), 
+    mu <- a + B %*% w, 
+    a ~ dnorm(6,10),
+    w ~ dnorm(0,1), 
+    sigma ~ dexp(1)
+  ),
+  data=list( T=d2$temp, B=B), 
+  start=list(w=rep(0,ncol(B)))
+)
+
+precis(m4.7, depth=2)
+
+post <- extract.samples(m4.7)
+w <- apply(post$w, 2, mean )
+plot(NULL, xlim=range(d2$year), ylim=c(-2,2), 
+     xlab="year", ylab="basis * weight")
+for(i in 1:ncol(B)) lines(d2$year, w[i] * B[,i])
+
+mu <- link(m4.7)
+mu_PI <- apply(mu, 2, PI, 0.97)
+plot(d2$year, d2$temp, col=col.alpha(rangi2, 0.3), pch=16)
+shade(mu_PI, d2$year, col=col.alpha("black", 0.5))
+
+
+
+

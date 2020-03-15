@@ -1,0 +1,103 @@
+---
+title: "Chapter5_practices"
+output: html_notebook
+---
+
+```{r}
+library(rethinking)
+```
+
+
+# 5E1
+
+(2) and (4) are multiple linear regression model
+
+
+# 5E2
+
+Let define our terms first. Let's call Animal diversity $A$, latitude $L$, and plant diversity $P$. Then, the model becomes 
+
+$$
+L \sim Normal(\mu, sigma) \\
+\mu \sim \alpha + \beta _A \cdot A + \beta _L \cdot L \\
+\vdots\\
+\text{(Define parameters here)}
+
+$$
+
+# 5E3
+
+Again, let's define the terms first. Amount of funding is $F$, size of laboratory is $S$, and time to PhD degree is $T$. 
+
+Then the model definition is 
+
+$$
+T \sim Normal(\mu, sigma)\\
+\mu \sim \alpha + \beta_F\cdot F + \beta_L \cdot L\\
+\vdots\\
+\text{(Define the parameters here)}
+$$
+
+# 5E4
+
+(1), (2), and (3) are the inferentially equivalent ways to create the model. 
+
+
+# 5M1
+
+The example that I came up is the temperature, $T$, ice cream same, $S$, and number of heatstroke $N$. 
+
+Causally, we can draw down the following DAG: 
+
+```{r}
+library(dagitty)
+d <- dagitty(
+"dag{ T -> S
+      T -> N}")
+coordinates(d) <- list(x=c(T=1, S=0, N=2), y=c(T=-1, S=0, N=0))
+plot(d)
+```
+
+This is a fork. So if we condition on both T and S, we would not be able to observe the effect of T. However, if we model on S and T alone, there would be positive correlation between them and N.
+
+Let's make this example more concrete. 
+
+Assume the distribution and relationship between vairable: 
+
+$$
+T \sim Normal(20, 5) \\
+S = 20 + Normal(T, 5)\\
+N = 10 + Normal(T, 1)
+$$
+
+```{r}
+# create the samples
+T_sample <- rnorm(1000, 20, 5)
+S_sample <- 20 + mapply(FUN=rnorm, n=1, mean=T_sample, sd=5)
+N_sample <- 10 + mapply(FUN=rnorm, n=1, mean=T_sample, sd=1)
+
+d <- data.frame(T=T_sample, S=S_sample, N=N_sample)
+
+# fit the model
+m5.1a <- quap(
+  alist(
+    T ~ dnorm(mu, sigma), 
+    mu <- a * 
+  )
+)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
